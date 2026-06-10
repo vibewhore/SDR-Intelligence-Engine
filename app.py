@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from google import genai
+from groq import Groq
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -17,128 +17,58 @@ st.set_page_config(
 # --- 2. ZETTA JOULE INSPIRED CSS ---
 st.markdown("""
 <style>
-    .stApp {
-        background: radial-gradient(circle at 10% 20%, #0a0e17 0%, #000000 100%);
-        color: #e0e6ed;
-    }
+    .stApp { background: radial-gradient(circle at 10% 20%, #0a0e17 0%, #000000 100%); color: #e0e6ed; }
     .main-title {
-        font-size: 3.5rem;
-        font-weight: 900;
-        background: -webkit-linear-gradient(45deg, #00f2fe, #4facfe);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 0px;
-        padding-bottom: 0px;
-        letter-spacing: -1px;
+        font-size: 3.5rem; font-weight: 900; background: -webkit-linear-gradient(45deg, #00f2fe, #4facfe);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0px; padding-bottom: 0px; letter-spacing: -1px;
     }
-    .subtitle {
-        color: #8da2b5;
-        font-size: 1.1rem;
-        margin-top: -10px;
-        margin-bottom: 30px;
-        font-weight: 300;
-    }
+    .subtitle { color: #8da2b5; font-size: 1.1rem; margin-top: -10px; margin-bottom: 30px; font-weight: 300; }
     .stButton>button {
-        background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
-        color: #000000 !important;
-        border: none;
-        border-radius: 8px;
-        font-weight: 700;
-        font-size: 1.1rem;
-        padding: 0.6rem 1.5rem;
-        box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
-        transition: all 0.3s ease;
+        background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%); color: #000000 !important; border: none;
+        border-radius: 8px; font-weight: 700; font-size: 1.1rem; padding: 0.6rem 1.5rem; box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3); transition: all 0.3s ease;
     }
-    .stButton>button:hover {
-        box-shadow: 0 6px 25px rgba(0, 242, 254, 0.6);
-        transform: translateY(-2px);
-    }
+    .stButton>button:hover { box-shadow: 0 6px 25px rgba(0, 242, 254, 0.6); transform: translateY(-2px); }
     .stTextArea textarea, .stTextInput input {
-        background: rgba(16, 22, 35, 0.7) !important;
-        border: 1px solid rgba(79, 172, 254, 0.2) !important;
-        border-radius: 10px;
-        color: #e0e6ed !important;
+        background: rgba(16, 22, 35, 0.7) !important; border: 1px solid rgba(79, 172, 254, 0.2) !important;
+        border-radius: 10px; color: #e0e6ed !important;
     }
-    .stTextArea textarea:focus, .stTextInput input:focus {
-        border: 1px solid #00f2fe !important;
-        box-shadow: 0 0 12px rgba(0, 242, 254, 0.2) !important;
-    }
-    [data-testid="stSidebar"] {
-        background-color: #05080f !important;
-        border-right: 1px solid rgba(79, 172, 254, 0.1);
-    }
-    .stAlert {
-        background-color: rgba(79, 172, 254, 0.05) !important;
-        border: 1px solid rgba(79, 172, 254, 0.3) !important;
-        color: #e0e6ed !important;
-    }
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(15px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    .fade-in {
-        animation: fadeIn 0.8s ease-out;
-    }
-    /* Center the login box */
-    .login-container {
-        background: rgba(16, 22, 35, 0.7);
-        padding: 30px;
-        border-radius: 15px;
-        border: 1px solid rgba(79, 172, 254, 0.2);
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    }
+    .stTextArea textarea:focus, .stTextInput input:focus { border: 1px solid #00f2fe !important; box-shadow: 0 0 12px rgba(0, 242, 254, 0.2) !important; }
+    [data-testid="stSidebar"] { background-color: #05080f !important; border-right: 1px solid rgba(79, 172, 254, 0.1); }
+    .fade-in { animation: fadeIn 0.8s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. SESSION STATE FOR LOGIN ---
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "role" not in st.session_state:
-    st.session_state.role = None
-if "username" not in st.session_state:
-    st.session_state.username = ""
+# --- 3. SESSION STATE FOR LOGIN & CHATBOT ---
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
+if "role" not in st.session_state: st.session_state.role = None
+if "username" not in st.session_state: st.session_state.username = ""
+if "current_analysis" not in st.session_state: st.session_state.current_analysis = None
+if "chat_history" not in st.session_state: st.session_state.chat_history = []
 
 # --- 4. LOGIN SCREEN ---
 if not st.session_state.logged_in:
-    # Use columns to center the login box
     col1, col2, col3 = st.columns([1, 1.5, 1])
-    
     with col2:
         st.markdown("<br><br><br>", unsafe_allow_html=True)
         st.markdown('<p class="main-title" style="text-align: center;">System Access</p>', unsafe_allow_html=True)
         st.markdown('<p class="subtitle" style="text-align: center;">Authorized Personnel Only</p>', unsafe_allow_html=True)
         
-        # Login Form
         with st.form("login_form"):
-            username = st.text_input("Username", placeholder="e.g., admin or sdr")
+            username = st.text_input("Username", placeholder="admin or sdr")
             password = st.text_input("Password", type="password", placeholder="••••••••")
             submit_button = st.form_submit_button("Authenticate ⚡", use_container_width=True)
             
             if submit_button:
-                # Admin Credentials
                 if username == "admin" and password == "admin123":
-                    st.session_state.logged_in = True
-                    st.session_state.role = "admin"
-                    st.session_state.username = "Administrator"
-                    st.rerun()
-                # SDR/Employee Credentials
+                    st.session_state.logged_in = True; st.session_state.role = "admin"; st.session_state.username = "Administrator"; st.rerun()
                 elif username == "sdr" and password == "sdr123":
-                    st.session_state.logged_in = True
-                    st.session_state.role = "employee"
-                    st.session_state.username = "SDR Team"
-                    st.rerun()
+                    st.session_state.logged_in = True; st.session_state.role = "employee"; st.session_state.username = "SDR Team"; st.rerun()
                 else:
                     st.error("❌ Access Denied: Invalid credentials.")
-    
-    # STOP the script here if they aren't logged in!
     st.stop()
 
-
-# ==========================================
 # --- 5. MAIN APP (ONLY SHOWS IF LOGGED IN) ---
-# ==========================================
-
-# Database Setup
 engine = create_engine(st.secrets["DATABASE_URL"])
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
@@ -151,69 +81,53 @@ class CallLog(Base):
     primary_objection = Column(String(200))
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
 
-# --- SIDEBAR LOGIC (ROLE BASED) ---
+# Initialize Groq Client
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+
+# --- SIDEBAR LOGIC ---
 with st.sidebar:
     st.markdown(f"### 👤 Welcome, {st.session_state.username}")
     if st.button("🚪 Logout", use_container_width=True):
-        st.session_state.logged_in = False
-        st.session_state.role = None
+        st.session_state.clear()
         st.rerun()
         
     st.markdown("---")
     st.header("🗄️ Supabase CRM")
     
-    # Check if Admin
     if st.session_state.role == "admin":
         st.markdown("Live database of processed calls.")
         try:
             db = SessionLocal()
             history = db.query(CallLog).order_by(CallLog.timestamp.desc()).limit(10).all()
-            
-            if not history:
-                st.info("No calls logged yet.")
+            if not history: st.info("No calls logged yet.")
             else:
                 for entry in history:
-                    formatted_time = entry.timestamp.strftime("%b %d - %I:%M %p")
                     st.markdown("---")
-                    st.caption(f"🕒 {formatted_time}")
+                    st.caption(f"🕒 {entry.timestamp.strftime('%b %d - %I:%M %p')}")
                     st.markdown(f"**Tag:** `{entry.primary_objection}`")
-                    with st.expander("View AI Analysis"):
-                        st.markdown(entry.analysis)
+                    with st.expander("View AI Analysis"): st.markdown(entry.analysis)
             db.close()
-        except Exception as e:
-            st.error(f"Could not load history: {e}")
+        except Exception as e: st.error(f"Could not load history: {e}")
     else:
-        # SDR View
         st.warning("🔒 Database view is restricted to Administrators.")
-        st.info("Your transcripts are being securely logged to the CRM in the background.")
 
 # --- MAIN WORKSPACE ---
 st.markdown('<p class="main-title">SDR Intelligence Engine ⚡</p>', unsafe_allow_html=True)
-st.markdown('<p class="subtitle">Real-time objection handling and automated CRM sync.</p>', unsafe_allow_html=True)
+st.markdown('<p class="subtitle">Real-time objection handling, CRM sync, and AI Strategy Coaching.</p>', unsafe_allow_html=True)
 
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    user_transcript = st.text_area(
-        "Call Transcript", 
-        height=300, 
-        placeholder="Paste your raw call transcript here..."
-    )
+    user_transcript = st.text_area("Call Transcript", height=250, placeholder="Paste your raw call transcript here...")
 
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🚀 Analyze Transcript & Sync to CRM", use_container_width=True):
         if not user_transcript.strip():
-            st.warning("⚠️ Please paste a transcript into the text area first.")
+            st.warning("⚠️ Please paste a transcript first.")
         else:
-            with st.spinner("🧠 Quantum processing initialized..."):
-                time.sleep(1.5) 
+            with st.spinner("🧠 Quantum processing initialized via Groq..."):
                 try:
-                    token = st.secrets["GEMINI_API_KEY"]
-                    if token.startswith("AQ."):
-                        client = genai.Client(credentials=token)
-                    else:
-                        client = genai.Client(api_key=token)
-                    
+                    # System Prompt for Groq (Meta Llama 3)
                     prompt = f"""
                     You are a high-speed Sales Assistant.
                     Analyze the following call transcript. 
@@ -224,73 +138,90 @@ with col1:
                     {user_transcript}
                     """
                     
-                    max_retries = 3
-                    response = None
+                    # Groq API Call
+                    chat_completion = client.chat.completions.create(
+                        messages=[{"role": "user", "content": prompt}],
+                        model="llama3-8b-8192", # Lightning fast Meta model
+                    )
                     
-                    for attempt in range(max_retries):
-                        try:
-                            response = client.models.generate_content(
-                                model='gemini-2.0-flash', 
-                                contents=prompt
-                            )
-                            break 
-                        except Exception as ai_error:
-                            if ("503" in str(ai_error) or "429" in str(ai_error) or "400" in str(ai_error)) and attempt < max_retries - 1:
-                                time.sleep(2)
-                            elif attempt == max_retries - 1:
-                                pass
-                            else:
-                                raise ai_error
+                    ai_text = chat_completion.choices[0].message.content
                     
-                    if not response:
-                        ai_text = """OBJECTION: Bound by Agency Contract
-
-**KEY OBJECTIONS:**
-* Currently locked into a contract with a digital marketing agency.
-
-**CRM SUMMARY:**
-SDR pitched local SEO automation. The manager was resistant due to an existing agency contract. SDR successfully pivoted by positioning the product as a supplementary tool.
-
-**ACTION PLAN:**
-* Send the case study to the manager's email.
-* Set an automated CRM task to follow up next Tuesday morning.
-
-**MAGIC FOLLOW-UP:**
-"Hi Manager, attached is that quick 2-minute breakdown. Let's touch base Tuesday."
-"""
-                    else:
-                        ai_text = response.text
-                    
+                    # Parse Objection
                     objection = "Not specified"
                     if "OBJECTION:" in ai_text:
                         objection = ai_text.split("OBJECTION:")[1].split("\n")[0].strip()
                     
+                    # Save to Supabase
                     db = SessionLocal()
-                    new_call = CallLog(
-                        transcript=user_transcript, 
-                        analysis=ai_text, 
-                        primary_objection=objection
-                    ) 
+                    new_call = CallLog(transcript=user_transcript, analysis=ai_text, primary_objection=objection) 
                     db.add(new_call)
                     db.commit()
                     db.close()
                     
-                    st.markdown("<hr>", unsafe_allow_html=True)
-                    st.success("✅ Analysis successfully pushed to Supabase CRM!")
+                    # Save analysis to session state so the chatbot can read it
+                    st.session_state.current_analysis = ai_text
+                    st.session_state.chat_history = [] # Clear previous chat history
                     
-                    st.markdown('<div class="fade-in">', unsafe_allow_html=True)
-                    st.markdown(ai_text)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                    st.success("✅ Analysis successfully pushed to Supabase CRM!")
                     
                 except Exception as e:
                     st.error(f"System Error: {e}")
 
+    # Display Current Analysis (if it exists)
+    if st.session_state.current_analysis:
+        st.markdown("<hr>", unsafe_allow_html=True)
+        st.markdown("### 📊 AI Call Analysis")
+        st.markdown('<div class="fade-in">', unsafe_allow_html=True)
+        st.markdown(st.session_state.current_analysis)
+        st.markdown('</div>', unsafe_allow_html=True)
+
 with col2:
     st.info("""
     **How it works:**
-    1. Paste raw conversational text from your calls.
-    2. The AI extracts the primary objection.
-    3. Generates a CRM-ready summary.
-    4. Drafts a personalized follow-up email.
-    5. Syncs everything to a Postgres cloud database.
+    1. **Paste** a call transcript.
+    2. **Groq Llama-3** parses objections instantly.
+    3. **Supabase Postgres** securely syncs the log.
+    4. **AI Coach** unlocks at the bottom to help you strategize next steps!
     """)
+
+# --- 6. AI STRATEGY COACH CHATBOT (Only appears after analysis) ---
+if st.session_state.current_analysis:
+    st.markdown("---")
+    st.markdown('<p class="main-title" style="font-size: 2.5rem;">🤖 Strategy Coach</p>', unsafe_allow_html=True)
+    st.markdown("Ask the AI to draft a custom email, write a LinkedIn connection request, or roleplay the next call based on the analysis above.")
+    
+    # Display chat history
+    for message in st.session_state.chat_history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Chat Input Box
+    if user_prompt := st.chat_input("E.g., 'Draft a casual LinkedIn request for this prospect...'"):
+        # Show user message
+        st.chat_message("user").markdown(user_prompt)
+        st.session_state.chat_history.append({"role": "user", "content": user_prompt})
+
+        # Generate AI response using Groq
+        with st.spinner("Thinking..."):
+            try:
+                # Give Groq the context of the current analysis, plus the user's new question
+                system_context = f"You are an elite Sales Manager coaching an SDR. Here is the context of their last call: {st.session_state.current_analysis}"
+                
+                messages_for_api = [{"role": "system", "content": system_context}]
+                # Add history so the bot remembers the conversation
+                for msg in st.session_state.chat_history:
+                    messages_for_api.append(msg)
+                
+                chat_completion = client.chat.completions.create(
+                    messages=messages_for_api,
+                    model="llama3-8b-8192",
+                )
+                
+                bot_response = chat_completion.choices[0].message.content
+                
+                # Show bot response
+                st.chat_message("assistant").markdown(bot_response)
+                st.session_state.chat_history.append({"role": "assistant", "content": bot_response})
+                
+            except Exception as e:
+                st.error(f"Chatbot Error: {e}")
