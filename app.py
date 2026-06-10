@@ -2,65 +2,59 @@ import streamlit as st
 import time
 from google import genai
 from google.genai import types
-from google.genai.errors import ClientError
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+import datetime
 
-# 1. UI Configuration
-st.set_page_config(page_title="SDR Intelligence Engine", page_icon="⚡", layout="centered")
+# Database Connection
+engine = create_engine(st.secrets["DATABASE_URL"])
+SessionLocal = sessionmaker(bind=engine)
+Base = declarative_base()
+
+class CallLog(Base):
+    __tablename__ = "call_logs"
+    id = Column(Integer, primary_key=True)
+    transcript = Column(Text)
+    analysis = Column(Text)
+    primary_objection = Column(String(200))
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+Base.metadata.create_all(engine)
+
+# App UI
 st.title("⚡ SDR Intelligence Engine")
-st.markdown("Paste your transcript to generate instant sales insights.")
+user_transcript = st.text_area("Call Transcript", height=200)
 
-# 2. User Input
-user_transcript = st.text_area("Call Transcript", height=250, placeholder="Paste call transcript here...")
+if st.button("Analyze & Save"):
+    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+    
+    # AI logic
+    response = client.models.generate_content(
+        model='gemini-3.5-flash',
+        contents=f"Analyze this. Return first line as 'OBJECTION: [short objection]'. Then provide analysis.\n\n{user_transcript}"
+    )
+    
+    # Parse Objection
+    ai_text = response.text
+    objection = "Not specified"
+    if "OBJECTION:" in ai_text:
+        objection = ai_text.split("OBJECTION:")[1].split("\n")[0].strip()
+    
+    # Save to DB
+    db = SessionLocal()
+    new_call = CallLog(transcript=user_transcript, analysis=ai_text, primary_objection=objection)
+    db.add(new_call)
+    db.commit()
+    db.close()
+    
+    st.markdown(ai_text)
+    st.success("Saved to memory!")
 
-# 3. Processing Logic
-if st.button("Analyze Call"):
-    if user_transcript.strip() == "":
-        st.error("Please paste a transcript first.")
-    else:
-        with st.spinner("Analyzing call..."):
-            try:
-                # Initialize Client using Streamlit Secrets
-                client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-                
-                # High-Speed, Concise System Instructions
-                system_instruction = """
-                You are a high-speed Sales Assistant. 
-                Constraint: Be extremely brief. Use bullet points only. 
-                Max 2 sentences per section. No filler language.
-                
-                Return:
-                * **KEY OBJECTIONS:**
-                * **COMPETITORS:**
-                * **CRM SUMMARY:**
-                * **ACTION PLAN:**
-                * **MAGIC FOLLOW-UP:**
-                """
-                
-                # Retry Logic (Exponential Backoff for 429/503 errors)
-                max_attempts = 3
-                for attempt in range(max_attempts):
-                    try:
-                        response = client.models.generate_content(
-                            model='gemini-3.5-flash',
-                            contents=user_transcript,
-                            config=types.GenerateContentConfig(
-                                system_instruction=system_instruction,
-                                temperature=0.1,
-                            )
-                        )
-                        
-                        st.markdown("---")
-                        st.markdown(response.text)
-                        break # Exit loop on success
-                        
-                    except ClientError as e:
-                        if e.code in [429, 503] and attempt < max_attempts - 1:
-                            wait_time = (attempt + 1) * 5
-                            st.warning(f"Server busy or limit reached. Retrying in {wait_time}s...")
-                            time.sleep(wait_time)
-                        else:
-                            st.error(f"Failed after {max_attempts} attempts. Error: {e}")
-                            break
-                            
-            except Exception as e:
-                st.error(f"An unexpected error occurred: {e}")
+# History Tab
+if st.checkbox("Show History"):
+    db = SessionLocal()
+    history = db.query(CallLog).order_by(CallLog.timestamp.desc()).all()
+    for entry in history:
+        st.write(f"**Obj:** {entry.primary_objection} | **Time:** {entry.timestamp}")
+    db.close()
