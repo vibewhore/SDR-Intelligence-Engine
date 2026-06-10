@@ -7,12 +7,10 @@ from sqlalchemy.orm import sessionmaker
 import datetime
 
 # --- Database Setup ---
-# Connect to Supabase using the URL from Streamlit Secrets
 engine = create_engine(st.secrets["DATABASE_URL"])
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
-# Define the database table schema
 class CallLog(Base):
     __tablename__ = "call_logs"
     id = Column(Integer, primary_key=True)
@@ -20,9 +18,6 @@ class CallLog(Base):
     analysis = Column(Text)
     primary_objection = Column(String(200))
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
-
-# NOTE: Base.metadata.create_all(engine) is removed.
-# The table is managed directly in Supabase to prevent cloud pooler errors.
 
 # --- UI and App Logic ---
 st.title("⚡ SDR Intelligence Engine")
@@ -37,14 +32,10 @@ if st.button("Analyze & Save"):
         with st.spinner("Analyzing call..."):
             try:
                 # 1. Initialize AI Client 
-                # Handles both standard 'AIza' keys and 'AQ.' OAuth tokens
                 token = st.secrets["GEMINI_API_KEY"]
-                
                 if token.startswith("AQ."):
-                    # Treat as an OAuth credential token
                     client = genai.Client(credentials=token)
                 else:
-                    # Treat as a standard API key
                     client = genai.Client(api_key=token)
                 
                 # 2. Call AI with specific instructions
@@ -58,11 +49,31 @@ if st.button("Analyze & Save"):
                 {user_transcript}
                 """
                 
-                response = client.models.generate_content(
-                    model='gemini-3.5-flash',
-                    contents=prompt
-                )
+                # --- THE PRO DEVELOPER RETRY LOOP ---
+                max_retries = 3
+                response = None
                 
+                for attempt in range(max_retries):
+                    try:
+                        response = client.models.generate_content(
+                            model='gemini-3.5-flash',
+                            contents=prompt
+                        )
+                        break # If it works, break out of the retry loop
+                    except Exception as ai_error:
+                        # If it's a 503 error and we haven't run out of tries, wait and retry
+                        if "503" in str(ai_error) and attempt < max_retries - 1:
+                            st.warning(f"Google servers are currently busy. Retrying in 3 seconds... (Attempt {attempt + 1}/{max_retries})")
+                            time.sleep(3)
+                        else:
+                            # If it's a different error, or we are out of tries, crash normally
+                            raise ai_error
+                
+                # Ensure we actually got a response before proceeding
+                if not response:
+                    st.error("Failed to get a response from the AI after multiple attempts.")
+                    st.stop()
+
                 ai_text = response.text
                 
                 # 3. Parse the Primary Objection
@@ -94,18 +105,15 @@ if st.checkbox("Show History"):
     st.subheader("Call Logs")
     try:
         db = SessionLocal()
-        # Fetch history, newest first
         history = db.query(CallLog).order_by(CallLog.timestamp.desc()).all()
         
         if not history:
             st.info("No calls logged yet. Analyze a transcript to see it here!")
         else:
             for entry in history:
-                # Format the timestamp nicely
                 formatted_time = entry.timestamp.strftime("%Y-%m-%d %H:%M:%S")
                 st.markdown(f"**Date:** {formatted_time} | **Objection:** {entry.primary_objection}")
                 
-                # Make the analysis collapsible to keep the UI clean
                 with st.expander("View Full Analysis"):
                     st.markdown(entry.analysis)
         db.close()
