@@ -19,8 +19,8 @@ if st.button("Analyze Call"):
     else:
         with st.spinner("Analyzing call..."):
             try:
-                # Initialize Client (Replace with your actual key)
-client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+                # Initialize Client using Streamlit Secrets
+                client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
                 
                 # High-Speed, Concise System Instructions
                 system_instruction = """
@@ -38,8 +38,6 @@ client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
                 
                 # Retry Logic (Exponential Backoff for 429/503 errors)
                 max_attempts = 3
-                success = False
-                
                 for attempt in range(max_attempts):
                     try:
                         response = client.models.generate_content(
@@ -47,23 +45,21 @@ client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
                             contents=user_transcript,
                             config=types.GenerateContentConfig(
                                 system_instruction=system_instruction,
-                                temperature=0.1, # Lowest temperature for speed
+                                temperature=0.1,
                             )
                         )
                         
                         st.markdown("---")
                         st.markdown(response.text)
-                        success = True
                         break # Exit loop on success
                         
                     except ClientError as e:
-                        # Catch Rate Limits (429) and Server Overload (503)
                         if e.code in [429, 503] and attempt < max_attempts - 1:
-                            wait_time = (attempt + 1) * 5 # Wait 5s, then 10s, then 15s
+                            wait_time = (attempt + 1) * 5
                             st.warning(f"Server busy or limit reached. Retrying in {wait_time}s...")
                             time.sleep(wait_time)
                         else:
-                            st.error(f"Failed after {max_attempts} attempts. Please check your quota or try later. Error: {e}")
+                            st.error(f"Failed after {max_attempts} attempts. Error: {e}")
                             break
                             
             except Exception as e:
