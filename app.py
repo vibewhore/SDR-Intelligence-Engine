@@ -108,11 +108,39 @@ SDR pitched zero-touch SEO automation. Rahul (Manager) is relying on word-of-mou
                     transcript=user_transcript, 
                     analysis=ai_text, 
                     primary_objection=objection
-                ) # <--- The parenthesis syntax fix is implemented here
+                ) 
                 
                 db.add(new_call)
                 db.commit()
                 db.close()
                 
                 # 5. Display Results
-                st.success("Analysis complete and saved to
+                st.success("Analysis complete and saved to memory!")
+                st.markdown(ai_text)
+                
+            except Exception as e:
+                st.error(f"A critical error occurred: {e}")
+
+# --- History Section ---
+st.markdown("---")
+if st.checkbox("Show History"):
+    st.subheader("Call Logs")
+    try:
+        db = SessionLocal()
+        # Fetch history, newest first
+        history = db.query(CallLog).order_by(CallLog.timestamp.desc()).all()
+        
+        if not history:
+            st.info("No calls logged yet. Analyze a transcript to see it here!")
+        else:
+            for entry in history:
+                # Format the timestamp nicely
+                formatted_time = entry.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                st.markdown(f"**Date:** {formatted_time} | **Objection:** {entry.primary_objection}")
+                
+                # Make the analysis collapsible to keep the UI clean
+                with st.expander("View Full Analysis"):
+                    st.markdown(entry.analysis)
+        db.close()
+    except Exception as e:
+        st.error(f"Could not load history: {e}")
