@@ -20,7 +20,7 @@ if st.button("Analyze Call"):
         with st.spinner("Analyzing call..."):
             try:
                 # Initialize Client (Replace with your actual key)
-                client = genai.Client(api_key="AQ.Ab8RN6JntgswhGrUugWePy2EShWM2k-YFSNGkOUGGnBahKYViA")
+client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
                 
                 # High-Speed, Concise System Instructions
                 system_instruction = """
