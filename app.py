@@ -61,7 +61,7 @@ if st.button("Analyze & Save"):
                 for attempt in range(max_retries):
                     try:
                         response = client.models.generate_content(
-                            model='gemini-1.5-flash',
+                            model='gemini-2.0-flash', # <--- UPGRADED TO THE NEW ACTIVE MODEL
                             contents=prompt
                         )
                         break # If it works, break out of the retry loop
