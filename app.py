@@ -21,7 +21,7 @@ class CallLog(Base):
     primary_objection = Column(String(200))
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
 
-# NOTE: Base.metadata.create_all(engine) is removed!
+# NOTE: Base.metadata.create_all(engine) is removed.
 # The table is managed directly in Supabase to prevent cloud pooler errors.
 
 # --- UI and App Logic ---
@@ -36,8 +36,16 @@ if st.button("Analyze & Save"):
     else:
         with st.spinner("Analyzing call..."):
             try:
-                # 1. Initialize AI Client
-                client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+                # 1. Initialize AI Client 
+                # Handles both standard 'AIza' keys and 'AQ.' OAuth tokens
+                token = st.secrets["GEMINI_API_KEY"]
+                
+                if token.startswith("AQ."):
+                    # Treat as an OAuth credential token
+                    client = genai.Client(credentials=token)
+                else:
+                    # Treat as a standard API key
+                    client = genai.Client(api_key=token)
                 
                 # 2. Call AI with specific instructions
                 prompt = f"""
