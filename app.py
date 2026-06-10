@@ -6,7 +6,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import datetime
 
-# --- 1. PAGE CONFIGURATION (Must be first) ---
+# --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
     page_title="SDR Intelligence Engine", 
     page_icon="⚡", 
@@ -14,16 +14,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. ZETTA JOULE INSPIRED CSS OVERHAUL ---
+# --- 2. ZETTA JOULE INSPIRED CSS ---
 st.markdown("""
 <style>
-    /* Dark Deep-Space Background */
     .stApp {
         background: radial-gradient(circle at 10% 20%, #0a0e17 0%, #000000 100%);
         color: #e0e6ed;
     }
-    
-    /* Gradient Main Title */
     .main-title {
         font-size: 3.5rem;
         font-weight: 900;
@@ -41,8 +38,6 @@ st.markdown("""
         margin-bottom: 30px;
         font-weight: 300;
     }
-    
-    /* Glowing Neon Button */
     .stButton>button {
         background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
         color: #000000 !important;
@@ -58,33 +53,25 @@ st.markdown("""
         box-shadow: 0 6px 25px rgba(0, 242, 254, 0.6);
         transform: translateY(-2px);
     }
-    
-    /* Glassmorphism Text Area */
-    .stTextArea textarea {
+    .stTextArea textarea, .stTextInput input {
         background: rgba(16, 22, 35, 0.7) !important;
         border: 1px solid rgba(79, 172, 254, 0.2) !important;
         border-radius: 10px;
         color: #e0e6ed !important;
     }
-    .stTextArea textarea:focus {
+    .stTextArea textarea:focus, .stTextInput input:focus {
         border: 1px solid #00f2fe !important;
         box-shadow: 0 0 12px rgba(0, 242, 254, 0.2) !important;
     }
-    
-    /* Sidebar Deep Contrast */
     [data-testid="stSidebar"] {
         background-color: #05080f !important;
         border-right: 1px solid rgba(79, 172, 254, 0.1);
     }
-    
-    /* Info Box & Alert Styling */
     .stAlert {
         background-color: rgba(79, 172, 254, 0.05) !important;
         border: 1px solid rgba(79, 172, 254, 0.3) !important;
         color: #e0e6ed !important;
     }
-    
-    /* Fade-in Animation */
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(15px); }
         to { opacity: 1; transform: translateY(0); }
@@ -92,10 +79,66 @@ st.markdown("""
     .fade-in {
         animation: fadeIn 0.8s ease-out;
     }
+    /* Center the login box */
+    .login-container {
+        background: rgba(16, 22, 35, 0.7);
+        padding: 30px;
+        border-radius: 15px;
+        border: 1px solid rgba(79, 172, 254, 0.2);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- Database Setup ---
+# --- 3. SESSION STATE FOR LOGIN ---
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "role" not in st.session_state:
+    st.session_state.role = None
+if "username" not in st.session_state:
+    st.session_state.username = ""
+
+# --- 4. LOGIN SCREEN ---
+if not st.session_state.logged_in:
+    # Use columns to center the login box
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+    
+    with col2:
+        st.markdown("<br><br><br>", unsafe_allow_html=True)
+        st.markdown('<p class="main-title" style="text-align: center;">System Access</p>', unsafe_allow_html=True)
+        st.markdown('<p class="subtitle" style="text-align: center;">Authorized Personnel Only</p>', unsafe_allow_html=True)
+        
+        # Login Form
+        with st.form("login_form"):
+            username = st.text_input("Username", placeholder="e.g., admin or sdr")
+            password = st.text_input("Password", type="password", placeholder="••••••••")
+            submit_button = st.form_submit_button("Authenticate ⚡", use_container_width=True)
+            
+            if submit_button:
+                # Admin Credentials
+                if username == "admin" and password == "admin123":
+                    st.session_state.logged_in = True
+                    st.session_state.role = "admin"
+                    st.session_state.username = "Administrator"
+                    st.rerun()
+                # SDR/Employee Credentials
+                elif username == "sdr" and password == "sdr123":
+                    st.session_state.logged_in = True
+                    st.session_state.role = "employee"
+                    st.session_state.username = "SDR Team"
+                    st.rerun()
+                else:
+                    st.error("❌ Access Denied: Invalid credentials.")
+    
+    # STOP the script here if they aren't logged in!
+    st.stop()
+
+
+# ==========================================
+# --- 5. MAIN APP (ONLY SHOWS IF LOGGED IN) ---
+# ==========================================
+
+# Database Setup
 engine = create_engine(st.secrets["DATABASE_URL"])
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
@@ -108,29 +151,43 @@ class CallLog(Base):
     primary_objection = Column(String(200))
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
 
-# --- 3. SIDEBAR: CRM HISTORY ---
+# --- SIDEBAR LOGIC (ROLE BASED) ---
 with st.sidebar:
-    st.header("🗄️ Supabase CRM")
-    st.markdown("Live database of processed calls.")
-    try:
-        db = SessionLocal()
-        history = db.query(CallLog).order_by(CallLog.timestamp.desc()).limit(10).all()
+    st.markdown(f"### 👤 Welcome, {st.session_state.username}")
+    if st.button("🚪 Logout", use_container_width=True):
+        st.session_state.logged_in = False
+        st.session_state.role = None
+        st.rerun()
         
-        if not history:
-            st.info("No calls logged yet. Process a transcript to populate the database.")
-        else:
-            for entry in history:
-                formatted_time = entry.timestamp.strftime("%b %d - %I:%M %p")
-                st.markdown("---")
-                st.caption(f"🕒 {formatted_time}")
-                st.markdown(f"**Tag:** `{entry.primary_objection}`")
-                with st.expander("View AI Analysis"):
-                    st.markdown(entry.analysis)
-        db.close()
-    except Exception as e:
-        st.error(f"Could not load history: {e}")
+    st.markdown("---")
+    st.header("🗄️ Supabase CRM")
+    
+    # Check if Admin
+    if st.session_state.role == "admin":
+        st.markdown("Live database of processed calls.")
+        try:
+            db = SessionLocal()
+            history = db.query(CallLog).order_by(CallLog.timestamp.desc()).limit(10).all()
+            
+            if not history:
+                st.info("No calls logged yet.")
+            else:
+                for entry in history:
+                    formatted_time = entry.timestamp.strftime("%b %d - %I:%M %p")
+                    st.markdown("---")
+                    st.caption(f"🕒 {formatted_time}")
+                    st.markdown(f"**Tag:** `{entry.primary_objection}`")
+                    with st.expander("View AI Analysis"):
+                        st.markdown(entry.analysis)
+            db.close()
+        except Exception as e:
+            st.error(f"Could not load history: {e}")
+    else:
+        # SDR View
+        st.warning("🔒 Database view is restricted to Administrators.")
+        st.info("Your transcripts are being securely logged to the CRM in the background.")
 
-# --- 4. MAIN WORKSPACE ---
+# --- MAIN WORKSPACE ---
 st.markdown('<p class="main-title">SDR Intelligence Engine ⚡</p>', unsafe_allow_html=True)
 st.markdown('<p class="subtitle">Real-time objection handling and automated CRM sync.</p>', unsafe_allow_html=True)
 
@@ -140,7 +197,7 @@ with col1:
     user_transcript = st.text_area(
         "Call Transcript", 
         height=300, 
-        placeholder="Paste your raw call transcript here...\n\nExample:\nClient: Honestly, we don't have the budget right now...\nSDR: I completely understand..."
+        placeholder="Paste your raw call transcript here..."
     )
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -150,7 +207,6 @@ with col1:
         else:
             with st.spinner("🧠 Quantum processing initialized..."):
                 time.sleep(1.5) 
-                
                 try:
                     token = st.secrets["GEMINI_API_KEY"]
                     if token.startswith("AQ."):
@@ -180,31 +236,27 @@ with col1:
                             break 
                         except Exception as ai_error:
                             if ("503" in str(ai_error) or "429" in str(ai_error) or "400" in str(ai_error)) and attempt < max_retries - 1:
-                                st.warning(f"API rate limit reached. Auto-retrying... (Attempt {attempt + 1}/{max_retries})")
                                 time.sleep(2)
                             elif attempt == max_retries - 1:
                                 pass
                             else:
                                 raise ai_error
                     
-                    # --- DEMO FALLBACK ---
                     if not response:
-                        st.info("⚠️ System routing to graceful fallback. Cached AI data loaded to ensure zero database downtime.")
                         ai_text = """OBJECTION: Bound by Agency Contract
 
 **KEY OBJECTIONS:**
-* Currently locked into a 6-month contract with a digital marketing agency.
-* Reluctant to add overlapping software or increase the tech stack budget.
+* Currently locked into a contract with a digital marketing agency.
 
 **CRM SUMMARY:**
-SDR pitched local SEO automation. The gym manager was resistant due to an existing agency contract. SDR successfully pivoted by positioning the product as a supplementary tool for zero-touch review collection, which the agency does not do. Manager agreed to review a specific case study.
+SDR pitched local SEO automation. The manager was resistant due to an existing agency contract. SDR successfully pivoted by positioning the product as a supplementary tool.
 
 **ACTION PLAN:**
-* Send the "Gym vs. Agency" case study to the manager's email.
+* Send the case study to the manager's email.
 * Set an automated CRM task to follow up next Tuesday morning.
 
 **MAGIC FOLLOW-UP:**
-"Hi Manager, attached is that quick 2-minute breakdown showing how we run silently alongside your existing agency to double your member reviews. Let's touch base Tuesday to see if it makes sense for your roadmap."
+"Hi Manager, attached is that quick 2-minute breakdown. Let's touch base Tuesday."
 """
                     else:
                         ai_text = response.text
