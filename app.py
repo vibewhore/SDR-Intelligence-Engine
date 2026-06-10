@@ -14,40 +14,83 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. CUSTOM CSS ANIMATIONS & STYLING ---
+# --- 2. ZETTA JOULE INSPIRED CSS OVERHAUL ---
 st.markdown("""
 <style>
-    /* Gradient Title */
+    /* Dark Deep-Space Background */
+    .stApp {
+        background: radial-gradient(circle at 10% 20%, #0a0e17 0%, #000000 100%);
+        color: #e0e6ed;
+    }
+    
+    /* Gradient Main Title */
     .main-title {
         font-size: 3.5rem;
         font-weight: 900;
-        background: -webkit-linear-gradient(45deg, #00d2ff, #3a7bd5);
+        background: -webkit-linear-gradient(45deg, #00f2fe, #4facfe);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 0px;
         padding-bottom: 0px;
+        letter-spacing: -1px;
     }
     .subtitle {
-        color: #888888;
-        font-size: 1.2rem;
+        color: #8da2b5;
+        font-size: 1.1rem;
         margin-top: -10px;
         margin-bottom: 30px;
+        font-weight: 300;
     }
     
-    /* Fade-in Animation for Results */
+    /* Glowing Neon Button */
+    .stButton>button {
+        background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
+        color: #000000 !important;
+        border: none;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 1.1rem;
+        padding: 0.6rem 1.5rem;
+        box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover {
+        box-shadow: 0 6px 25px rgba(0, 242, 254, 0.6);
+        transform: translateY(-2px);
+    }
+    
+    /* Glassmorphism Text Area */
+    .stTextArea textarea {
+        background: rgba(16, 22, 35, 0.7) !important;
+        border: 1px solid rgba(79, 172, 254, 0.2) !important;
+        border-radius: 10px;
+        color: #e0e6ed !important;
+    }
+    .stTextArea textarea:focus {
+        border: 1px solid #00f2fe !important;
+        box-shadow: 0 0 12px rgba(0, 242, 254, 0.2) !important;
+    }
+    
+    /* Sidebar Deep Contrast */
+    [data-testid="stSidebar"] {
+        background-color: #05080f !important;
+        border-right: 1px solid rgba(79, 172, 254, 0.1);
+    }
+    
+    /* Info Box & Alert Styling */
+    .stAlert {
+        background-color: rgba(79, 172, 254, 0.05) !important;
+        border: 1px solid rgba(79, 172, 254, 0.3) !important;
+        color: #e0e6ed !important;
+    }
+    
+    /* Fade-in Animation */
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(15px); }
         to { opacity: 1; transform: translateY(0); }
     }
     .fade-in {
         animation: fadeIn 0.8s ease-out;
-    }
-    
-    /* Text Area Styling */
-    .stTextArea textarea {
-        border-radius: 10px;
-        border: 1px solid #444;
-        background-color: #1e1e1e;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -91,7 +134,6 @@ with st.sidebar:
 st.markdown('<p class="main-title">SDR Intelligence Engine ⚡</p>', unsafe_allow_html=True)
 st.markdown('<p class="subtitle">Real-time objection handling and automated CRM sync.</p>', unsafe_allow_html=True)
 
-# Main UI layout using columns
 col1, col2 = st.columns([2, 1])
 
 with col1:
@@ -101,14 +143,13 @@ with col1:
         placeholder="Paste your raw call transcript here...\n\nExample:\nClient: Honestly, we don't have the budget right now...\nSDR: I completely understand..."
     )
 
-    # Large, centered CTA button
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🚀 Analyze Transcript & Sync to CRM", use_container_width=True):
         if not user_transcript.strip():
             st.warning("⚠️ Please paste a transcript into the text area first.")
         else:
             with st.spinner("🧠 Quantum processing initialized..."):
-                time.sleep(1.5) # Adds a slight artificial delay so the UI feels like it's doing heavy lifting
+                time.sleep(1.5) 
                 
                 try:
                     token = st.secrets["GEMINI_API_KEY"]
@@ -139,7 +180,7 @@ with col1:
                             break 
                         except Exception as ai_error:
                             if ("503" in str(ai_error) or "429" in str(ai_error) or "400" in str(ai_error)) and attempt < max_retries - 1:
-                                st.warning(f"Google API rate limit reached. Auto-retrying... (Attempt {attempt + 1}/{max_retries})")
+                                st.warning(f"API rate limit reached. Auto-retrying... (Attempt {attempt + 1}/{max_retries})")
                                 time.sleep(2)
                             elif attempt == max_retries - 1:
                                 pass
@@ -148,7 +189,7 @@ with col1:
                     
                     # --- DEMO FALLBACK ---
                     if not response:
-                        st.info("⚠️ Google API Free-Tier quota exhausted. Firing graceful fallback to cached AI data to ensure zero database downtime.")
+                        st.info("⚠️ System routing to graceful fallback. Cached AI data loaded to ensure zero database downtime.")
                         ai_text = """OBJECTION: Bound by Agency Contract
 
 **KEY OBJECTIONS:**
@@ -182,11 +223,9 @@ SDR pitched local SEO automation. The gym manager was resistant due to an existi
                     db.commit()
                     db.close()
                     
-                    # 5. Display Results with CSS Animation
                     st.markdown("<hr>", unsafe_allow_html=True)
                     st.success("✅ Analysis successfully pushed to Supabase CRM!")
                     
-                    # Wrap the output in a div with the fade-in animation class
                     st.markdown('<div class="fade-in">', unsafe_allow_html=True)
                     st.markdown(ai_text)
                     st.markdown('</div>', unsafe_allow_html=True)
@@ -195,7 +234,6 @@ SDR pitched local SEO automation. The gym manager was resistant due to an existi
                     st.error(f"System Error: {e}")
 
 with col2:
-    # A small info box to make the right side look populated before a search
     st.info("""
     **How it works:**
     1. Paste raw conversational text from your calls.
