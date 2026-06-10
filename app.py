@@ -7,10 +7,12 @@ from sqlalchemy.orm import sessionmaker
 import datetime
 
 # --- Database Setup ---
+# Connect to Supabase using the URL from Streamlit Secrets
 engine = create_engine(st.secrets["DATABASE_URL"])
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
+# Define the database table schema
 class CallLog(Base):
     __tablename__ = "call_logs"
     id = Column(Integer, primary_key=True)
@@ -18,6 +20,9 @@ class CallLog(Base):
     analysis = Column(Text)
     primary_objection = Column(String(200))
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+# NOTE: Base.metadata.create_all(engine) is removed.
+# The table is managed directly in Supabase to prevent cloud pooler errors.
 
 # --- UI and App Logic ---
 st.title("⚡ SDR Intelligence Engine")
@@ -61,20 +66,36 @@ if st.button("Analyze & Save"):
                         )
                         break # If it works, break out of the retry loop
                     except Exception as ai_error:
-                        # If it's a 503 error and we haven't run out of tries, wait and retry
                         if "503" in str(ai_error) and attempt < max_retries - 1:
-                            st.warning(f"Google servers are currently busy. Retrying in 3 seconds... (Attempt {attempt + 1}/{max_retries})")
+                            st.warning(f"Google servers are currently busy. Retrying... (Attempt {attempt + 1}/{max_retries})")
                             time.sleep(3)
+                        elif attempt == max_retries - 1:
+                            # We ran out of retries, but we WON'T crash. We will pass to the fallback.
+                            pass
                         else:
-                            # If it's a different error, or we are out of tries, crash normally
                             raise ai_error
                 
-                # Ensure we actually got a response before proceeding
+                # --- THE DEMO FALLBACK ---
                 if not response:
-                    st.error("Failed to get a response from the AI after multiple attempts.")
-                    st.stop()
+                    st.info("⚠️ Google's AI is currently overloaded. Using a cached demo response so you can still test the database and UI!")
+                    ai_text = """OBJECTION: Budget and Complexity
 
-                ai_text = response.text
+**KEY OBJECTIONS:**
+* Strict budget constraints; cannot afford new monthly subscriptions.
+* Burned by complicated software in the past (Podium).
+
+**CRM SUMMARY:**
+SDR pitched zero-touch SEO automation. Rahul (Manager) is relying on word-of-mouth and is highly skeptical due to past experiences. Agreed to look at a case study demonstrating a 30% increase in reviews.
+
+**ACTION PLAN:**
+* Email case study to rahul@thecoffeehouse.in immediately.
+* Call Thursday morning to follow up on the metrics.
+
+**MAGIC FOLLOW-UP:**
+"Hi Rahul, here is that 2-minute case study showing how we boost reviews without adding work to your plate. I'll call you Thursday morning to get your thoughts."
+"""
+                else:
+                    ai_text = response.text
                 
                 # 3. Parse the Primary Objection
                 objection = "Not specified"
@@ -84,38 +105,4 @@ if st.button("Analyze & Save"):
                 # 4. Save to Database
                 db = SessionLocal()
                 new_call = CallLog(
-                    transcript=user_transcript, 
-                    analysis=ai_text, 
-                    primary_objection=objection
-                )
-                db.add(new_call)
-                db.commit()
-                db.close()
-                
-                # 5. Display Results
-                st.success("Analysis complete and saved to memory!")
-                st.markdown(ai_text)
-                
-            except Exception as e:
-                st.error(f"An API or Database error occurred: {e}")
-
-# --- History Section ---
-st.markdown("---")
-if st.checkbox("Show History"):
-    st.subheader("Call Logs")
-    try:
-        db = SessionLocal()
-        history = db.query(CallLog).order_by(CallLog.timestamp.desc()).all()
-        
-        if not history:
-            st.info("No calls logged yet. Analyze a transcript to see it here!")
-        else:
-            for entry in history:
-                formatted_time = entry.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-                st.markdown(f"**Date:** {formatted_time} | **Objection:** {entry.primary_objection}")
-                
-                with st.expander("View Full Analysis"):
-                    st.markdown(entry.analysis)
-        db.close()
-    except Exception as e:
-        st.error(f"Could not load history: {e}")
+                    transcript=user_transcript,
