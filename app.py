@@ -105,4 +105,14 @@ SDR pitched zero-touch SEO automation. Rahul (Manager) is relying on word-of-mou
                 # 4. Save to Database
                 db = SessionLocal()
                 new_call = CallLog(
-                    transcript=user_transcript,
+                    transcript=user_transcript, 
+                    analysis=ai_text, 
+                    primary_objection=objection
+                ) # <--- The parenthesis syntax fix is implemented here
+                
+                db.add(new_call)
+                db.commit()
+                db.close()
+                
+                # 5. Display Results
+                st.success("Analysis complete and saved to
