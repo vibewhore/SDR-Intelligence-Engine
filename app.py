@@ -66,9 +66,10 @@ if st.button("Analyze & Save"):
                         )
                         break # If it works, break out of the retry loop
                     except Exception as ai_error:
-                        if "503" in str(ai_error) and attempt < max_retries - 1:
-                            st.warning(f"Google servers are currently busy. Retrying... (Attempt {attempt + 1}/{max_retries})")
-                            time.sleep(3)
+                        # Now catches BOTH 503 (Traffic) and 429 (Rate Limit) errors
+                        if ("503" in str(ai_error) or "429" in str(ai_error)) and attempt < max_retries - 1:
+                            st.warning(f"Google API rate limit reached. Retrying in 5 seconds... (Attempt {attempt + 1}/{max_retries})")
+                            time.sleep(5)
                         elif attempt == max_retries - 1:
                             # We ran out of retries, but we WON'T crash. We will pass to the fallback.
                             pass
